@@ -24,6 +24,11 @@ if [ $dev == "true" ]; then
     options="$options dev_build=true"
 fi
 
+# godot-cpp master has no default API and fails with "'api_version' must be provided".
+if [ -f "../godot-cpp/tools/godotcpp.py" ] && grep -q "supported_api_versions" ../godot-cpp/tools/godotcpp.py; then
+    options="$options api_version=4.6"
+fi
+
 if [ -z $raw_platform ]; then
     echo "Platform: current"
     platform=""
