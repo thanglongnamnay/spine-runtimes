@@ -243,15 +243,27 @@ void SpineMesh2D::update_mesh(const PackedVector2Array &vertices,
 		arrays[Mesh::ARRAY_COLOR] = colors;
 		arrays[Mesh::ARRAY_INDEX] = indices;
 		RS::get_singleton()->mesh_add_surface_from_arrays(mesh, RS::PrimitiveType::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(), RS::ArrayFormat::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
-		Dictionary surface = RS::get_singleton()->mesh_get_surface(mesh, 0);
-		RS::ArrayFormat surface_format = (RS::ArrayFormat) static_cast<int64_t>(surface["format"]);
+		// Every SpineMesh2D surface has the same layout (2D vertex, UV, color, index, dynamic update), so the
+		// format is read back from the GPU once per process. mesh_get_surface() copies the GPU buffers back,
+		// which on the web is a synchronous getBufferSubData() per buffer; meshes whose clipping or attachments
+		// change every frame used to pay that on every rebuild.
+		static int64_t cached_surface_format = -1;
+		if (cached_surface_format < 0) {
+			Dictionary surface = RS::get_singleton()->mesh_get_surface(mesh, 0);
+			cached_surface_format = static_cast<int64_t>(surface["format"]);
+		}
+		RS::ArrayFormat surface_format = (RS::ArrayFormat) cached_surface_format;
 		surface_offsets[RS::ARRAY_VERTEX] = RS::get_singleton()->mesh_surface_get_format_offset(surface_format, vertices.size(), RS::ARRAY_VERTEX);
 		surface_offsets[RS::ARRAY_COLOR] = RS::get_singleton()->mesh_surface_get_format_offset(surface_format, vertices.size(), RS::ARRAY_COLOR);
 		surface_offsets[RS::ARRAY_TEX_UV] = RS::get_singleton()->mesh_surface_get_format_offset(surface_format, vertices.size(), RS::ARRAY_TEX_UV);
 		vertex_stride = RS::get_singleton()->mesh_surface_get_format_vertex_stride(surface_format, vertices.size());
 		attribute_stride = RS::get_singleton()->mesh_surface_get_format_attribute_stride(surface_format, vertices.size());
-		vertex_buffer = surface["vertex_data"];
-		attribute_buffer = surface["attribute_data"];
+		// The update branch below rewrites every vertex, color and UV byte before uploading, so these only need
+		// the right size; their initial contents are never sent to the GPU.
+		vertex_buffer.resize(vertices.size() * vertex_stride);
+		vertex_buffer.fill(0);
+		attribute_buffer.resize(vertices.size() * attribute_stride);
+		attribute_buffer.fill(0);
 		num_vertices = vertices.size();
 		num_indices = indices.size();
 		indices_changed = false;
