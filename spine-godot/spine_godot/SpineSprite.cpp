@@ -1017,7 +1017,8 @@ void SpineSprite::update_meshes(Ref<SpineSkeleton> skeleton_ref) {
 					}
 				}
 				// The custom material, or the default material
-				Ref<Material> material = custom_material.is_valid() ? custom_material : statics.default_materials[blend_mode];
+				Ref<Material> material = custom_material;
+				if (!material.is_valid()) material = statics.default_materials[blend_mode];
 
 				if (batch && (batch->renderer_object != renderer_object || batch_material != material)) {
 					flush_batch();
