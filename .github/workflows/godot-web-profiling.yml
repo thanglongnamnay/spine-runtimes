@@ -1,0 +1,72 @@
+name: Godot web template + spine extension with function names (profiling only)
+
+# Profiling builds for the MeoDuKy web map editor: the same binaries it ships (official
+# Godot 4.7-stable dlink/nothreads release template, merged-slot spine web extension), linked
+# with --profiling-funcs so browser flame charts show C++ function names instead of
+# wasm-function[N]. Never ship these.
+
+on:
+  push:
+    branches: [web-template-profiling]
+  workflow_dispatch:
+
+env:
+  EM_VERSION: 4.0.20
+  GODOT_TAG: 4.7-stable
+  SPINE_GODOT_TAG: 4.6.1-stable
+  # emcc reads this on every compile and link, so neither SCons build needs a new option.
+  EMCC_CFLAGS: --profiling-funcs
+
+jobs:
+  template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v11
+        with:
+          version: ${{ env.EM_VERSION }}
+
+      - name: Setup python and scons
+        uses: ./.github/actions/setup-godot-deps-4
+
+      - name: Build template (as the official build, plus names)
+        run: |
+          git clone --depth 1 --branch "$GODOT_TAG" https://github.com/godotengine/godot.git godot-src
+          cd godot-src
+          scons platform=web target=template_release threads=no dlink_enabled=yes production=yes --jobs=$(nproc)
+          ls -la bin
+
+      - name: Upload template
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dlink-nothreads-release-profiling-${{ env.GODOT_TAG }}
+          path: godot-src/bin/godot.web.template_release.wasm32.nothreads.dlink.zip
+
+  spine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v11
+        with:
+          version: ${{ env.EM_VERSION }}
+
+      - name: Setup python and scons
+        uses: ./.github/actions/setup-godot-deps-4
+
+      - name: Build GDExtension
+        run: |
+          cd spine-godot/build
+          ./setup-extension.sh $SPINE_GODOT_TAG false
+          ./build-extension.sh web
+
+      - name: Upload extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: spine-web-profiling
+          path: spine-godot/example-v4-extension/bin/web/*.wasm
